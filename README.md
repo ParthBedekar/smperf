@@ -1,4 +1,4 @@
-# SMPerf — CPU Performance & Scaling Analyzer
+# SMPerf - Simple Multicore Performance Evaluation Framework
 
 SMPerf answers one question: **"If I give this program more threads, how much faster does it actually get, and why (or why not)?"**
 
