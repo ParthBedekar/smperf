@@ -11,8 +11,15 @@ public record MachineInfo(
         long ramBytes,
         int logicalCount,
         int physicalCount,
+        String pinning,
         List<Cpu> cpus,
         List<Cache> caches) {
+
+    /** "pinning" was added for the macOS port. Older engines / saved sessions don't
+     *  have it; those all came from the Linux engine, which always pins. */
+    public boolean pinningSupported() {
+        return pinning == null || "supported".equals(pinning);
+    }
 
     public record Cpu(
             int id,

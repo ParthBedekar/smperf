@@ -1,7 +1,9 @@
 #define _GNU_SOURCE
 #include "include/runner.h"
 #include "include/stats.h"
+#ifdef __linux__
 #include <sched.h>
+#endif
 #include <fcntl.h>
 #include <signal.h>
 
@@ -28,6 +30,7 @@ int run_once(const struct job *j, struct run_sample *s) {
             setenv("OMP_NUM_THREADS", buf, 1);
         }
 
+#ifdef __linux__
         if (j->cpus != NULL) {
             cpu_set_t set;
             CPU_ZERO(&set);
@@ -39,6 +42,10 @@ int run_once(const struct job *j, struct run_sample *s) {
             if (sched_setaffinity(0, sizeof set, &set) != 0)
                 _exit(AFFINITY_FAILED_EXIT);
         }
+#endif
+        /* macOS has no CPU affinity API (THREAD_AFFINITY_POLICY is only a hint and is
+         * ignored on Apple Silicon), so j->cpus is not applied there. The topology JSON
+         * reports "pinning": "unsupported" so the UI can say so. */
 
         int fd = open("/dev/null", O_WRONLY);
         if (fd >= 0) {
@@ -73,7 +80,11 @@ int run_once(const struct job *j, struct run_sample *s) {
     s->wall_sec = now_sec() - first;
     s->user_sec = ru.ru_utime.tv_sec + ru.ru_utime.tv_usec / 1e6;
     s->sys_sec  = ru.ru_stime.tv_sec + ru.ru_stime.tv_usec / 1e6;
+#ifdef __APPLE__
+    s->max_rss_kb = ru.ru_maxrss / 1024;   /* macOS reports bytes, Linux reports KB */
+#else
     s->max_rss_kb = ru.ru_maxrss;
+#endif
 
     if (WIFEXITED(status))        s->exit_code = WEXITSTATUS(status);
     else if (WIFSIGNALED(status)) s->term_signal = WTERMSIG(status);

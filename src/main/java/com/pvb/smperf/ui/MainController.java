@@ -181,6 +181,9 @@ public class MainController {
         workspace.insertTop(1, menus.buildToolbar()); // between menu bar and tab strip
         sessionActions.install(menuBar);              // adds Open Results / Recent / Save / Export / Clear Results
         sessionActions.installDropTarget(root);
+        if (System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("mac")) {
+            menuBar.setUseSystemMenuBar(true);        // macOS: use the global menu bar at the top of the screen
+        }
 
         workspace.show("home");
     }
@@ -237,6 +240,9 @@ public class MainController {
                 + (config.argsTemplate().isEmpty() ? "" : "  " + String.join(" ", config.argsTemplate())));
         log("Threads  " + (config.threads().isEmpty() ? "automatic" : config.threads().toString())
                 + "   ·   " + config.repeats() + " repetitions, " + config.warmup() + " warmup");
+        if (cachedMachineInfo != null && !cachedMachineInfo.pinningSupported()) {
+            log("Note     CPU pinning is not supported on this OS; only the thread count varies");
+        }
 
         activeTask = new Task<>() {
             @Override

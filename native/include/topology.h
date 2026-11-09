@@ -33,6 +33,7 @@ struct machine {
     uint64_t ram_bytes;
     int logical_count;
     int physical_count;
+    int pinning_supported;     /* 1 if run_once can really pin to cpus (emitted as "pinning") */
     struct logical_cpu cpus[MAX_LOGICAL];
     int cache_count;
     struct cache_info caches[MAX_CACHES];

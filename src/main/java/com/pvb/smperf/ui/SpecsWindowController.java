@@ -193,9 +193,14 @@ public class SpecsWindowController {
 
         cpuTable.setItems(FXCollections.observableArrayList(cpus));
 
+        String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
+        String source = os.contains("mac") ? "sysctl"
+                : os.contains("win") ? "Win32 API"
+                : "sysfs / procfs";
         statusLbl.setText(String.format(Locale.ROOT,
-                "%d logical CPUs  |  %d physical cores  |  %d cache objects  |  source: sysfs / procfs",
-                m.logicalCount(), m.physicalCount(), m.caches().size()));
+                "%d logical CPUs  |  %d physical cores  |  %d cache objects  |  source: %s%s",
+                m.logicalCount(), m.physicalCount(), m.caches().size(), source,
+                m.pinningSupported() ? "" : "  |  CPU pinning: not supported"));
     }
 
     // ---------- helpers ----------
