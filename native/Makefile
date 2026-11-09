@@ -14,8 +14,8 @@ ifeq ($(UNAME_S),Darwin)
   LDLIBS  :=
 else
   CC      ?= gcc
-  SOURCES := $(COMMON) src/topology_linux.c
-  LDLIBS  := -lm
+  SOURCES := $(COMMON) platform/linux/topology_linux.c
+   LDLIBS  := -lm
 endif
 
 HEADERS := $(wildcard include/*.h)
