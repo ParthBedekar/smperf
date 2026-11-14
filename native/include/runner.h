@@ -3,11 +3,13 @@
 #define RUNNER_H
 
 #include "util.h"
+#include <time.h>
+#ifndef _WIN32
 #include <sys/types.h>
 #include <unistd.h>
 #include <sys/wait.h>
 #include <sys/resource.h>
-#include <time.h>
+#endif
 #define MAX_ARGS         32
 #define MAX_REPEATS      64
 #define EXEC_FAILED_EXIT 127   /* child's exit code when exec itself fails */
@@ -19,8 +21,13 @@ enum run_status {
     RUN_OK         =  0,
     RUN_BAD_PARAMS = -1,   /* repeats outside 1..MAX_REPEATS */
     RUN_RUNNER_ERR = -2,   /* fork or wait4 failed */
-    RUN_BAD_PATH   = -3    /* exec failed, program never started */
+    RUN_BAD_PATH   = -3,   /* exec failed, program never started */
+    RUN_CANCELLED  = -5    /* run_once was aborted by a cancel request (Windows only; the
+                              POSIX engine finishes the current step instead) */
 };
+
+/* run_once() return values besides 0 (success) and -1 (runner error). */
+#define RUN_ONCE_CANCELLED (-2)
 
 /* j->warmup discarded launches, then j->repeats measured ones via run_once.
  * Returns a run_status. *r is zeroed before any early return. */
@@ -62,6 +69,8 @@ struct run_result {
 };
 
 
+/* Implemented per platform (platform/posix or platform/windows).
+ * Returns 0, -1 on runner failure, or RUN_ONCE_CANCELLED if aborted by a cancel request. */
 int run_once(const struct job *j, struct run_sample *s);
 
 int job_expand_args(struct job *j, const char *const *tmpl, int tmpl_count);

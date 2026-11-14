@@ -42,12 +42,10 @@ public final class Workspace {
     // centre area = page + (optional) dialog layer on top
     private final StackPane page = new StackPane();
     private final StackPane overlay = new StackPane();
-    // field (add near the other fields)
+    // menu bar + (optional) toolbar + tab strip + message bar; installed as root.top
     private final VBox top = new VBox();
 
-// constructor: delete the line  "VBox top = new VBox();"  (it now uses the field)
-
-    // new method (anywhere in the class)
+    /** Inserts a node into the top area (0 = above the menu bar, 1 = between menu bar and tabs). */
     public void insertTop(int index, Node n) {
         top.getChildren().add(Math.min(index, top.getChildren().size()), n);
     }
@@ -59,7 +57,6 @@ public final class Workspace {
         msgBar.setAlignment(Pos.CENTER_LEFT);
         hideBar();
 
-        VBox top = new VBox();
         if (root.getTop() != null) top.getChildren().add(root.getTop());   // keep the existing MenuBar
         top.getChildren().addAll(strip, msgBar);
         root.setTop(top);
@@ -106,6 +103,11 @@ public final class Workspace {
 
     public ReadOnlyStringProperty currentProperty() { return current.getReadOnlyProperty(); }
     public String currentId() { return current.get(); }
+
+    /** The tab button of a view (used by the guided tour to spotlight it), or null. */
+    public Node tabNode(String id) {
+        return tabs.get(id);
+    }
 
     public void setTabTitle(String id, String text) {
         ToggleButton t = tabs.get(id);

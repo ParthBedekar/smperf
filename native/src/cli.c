@@ -1,20 +1,13 @@
 #define _GNU_SOURCE
 #include <errno.h>
-#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "include/platform.h"
 #include "include/runner.h"
 #include "include/topology.h"
 
 #define MAX_STEPS 64
-
-static volatile sig_atomic_t stop_requested = 0;
-
-static void on_signal(int sig) {
-    (void)sig;
-    stop_requested = 1;
-}
 
 static int usage(const char *prog) {
     fprintf(stderr,
@@ -187,18 +180,13 @@ static int cmd_run(int argc, char **argv) {
     j.repeats = (int)repeats;
     j.timeout_sec = timeout;
 
-    struct sigaction sa;
-    memset(&sa, 0, sizeof sa);
-    sa.sa_handler = on_signal;
-    sigemptyset(&sa.sa_mask);
-    sigaction(SIGTERM, &sa, NULL);
-    sigaction(SIGINT, &sa, NULL);
+    platform_cancel_init();
 
     struct cpu_range nodes[MAX_LOGICAL];
     int ok = 1, cancelled = 0;
 
     for (int s = 0; s < step_count; s++) {
-        if (stop_requested) {
+        if (platform_cancel_requested()) {
             cancelled = 1;
             break;
         }
@@ -219,6 +207,10 @@ static int cmd_run(int argc, char **argv) {
 
         struct run_result r;
         int rc = run_job(&j, &r);
+        if (rc == RUN_CANCELLED) {      /* aborted mid-step (Windows); the partial step is discarded */
+            cancelled = 1;
+            break;
+        }
         if (rc != RUN_OK) {
             emit_error(t, rc, status_message(rc));
             ok = 0;
@@ -233,6 +225,7 @@ static int cmd_run(int argc, char **argv) {
 }
 
 int main(int argc, char **argv) {
+    platform_init(&argc, &argv);
     if (argc < 2) return usage(argv[0]);
     if (strcmp(argv[1], "topology") == 0) return cmd_topology();
     if (strcmp(argv[1], "run") == 0) return cmd_run(argc, argv);

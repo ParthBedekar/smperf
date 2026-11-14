@@ -76,6 +76,14 @@ void machine_free(struct machine *m) {
     }
 }
 
+void machine_add_warning(struct machine *m, const char *fmt, ...) {
+    if (m == NULL || m->warning_count >= (int)(sizeof m->warnings / sizeof m->warnings[0])) return;
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(m->warnings[m->warning_count++], sizeof m->warnings[0], fmt, ap);
+    va_end(ap);
+}
+
 static const char *type_name(enum core_type t) {
     switch (t) {
         case CORE_PERFORMANCE: return "performance";
@@ -149,5 +157,12 @@ void machine_print_json(const struct machine *m, FILE *out) {
         print_json_cpulist(out, k->shared_cpus);
         fputc('}', out);
     }
-    fputs(m->cache_count ? "\n  ]\n}\n" : "]\n}\n", out);
+    fputs(m->cache_count ? "\n  ],\n" : "],\n", out);
+
+    fputs("  \"warnings\": [", out);
+    for (int i = 0; i < m->warning_count; i++) {
+        if (i) fputs(", ", out);
+        print_json_string(out, m->warnings[i]);
+    }
+    fputs("]\n}\n", out);
 }

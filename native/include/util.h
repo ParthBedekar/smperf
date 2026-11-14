@@ -11,6 +11,16 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#ifdef _WIN32
+#define strtok_r strtok_s
+#endif
+
+/* Appends one argument to a Windows command line, quoted so that CommandLineToArgvW
+ * (and the MSVC CRT) read it back as exactly `arg`. Portable so it can be unit-tested
+ * on any OS. Returns the number of bytes appended (without the NUL), or -1 if it does
+ * not fit in `size` bytes (including the NUL). */
+int quote_windows_arg(const char *arg, char *dst, size_t size);
+
 int read_line(const char *path, char *buf, size_t size);
 int read_long(const char *path, long *out);
 int parse_size(const char *s, uint64_t *bytes);

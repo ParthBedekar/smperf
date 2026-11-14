@@ -65,6 +65,7 @@ public class EngineClient {
         ).start();
 
         activeProcess = process;
+        // On Windows the engine reads "stop" from this pipe. Elsewhere stdin is unused.
 
         Thread stderrReader = Thread.ofVirtual().start(() -> {
             try (var reader = new BufferedReader(
@@ -111,13 +112,40 @@ public class EngineClient {
         }
     }
 
+    /** How long the engine gets to stop on its own before it is killed (Windows only). */
+    private static final long STOP_GRACE_MS = 10_000;
+
     public void cancel() {
 
         Process process = activeProcess;
 
-        if (process != null && process.isAlive()) {
-            process.destroy();
+        if (process == null || !process.isAlive()) return;
+
+        if (!EngineLocator.isWindows()) {
+            process.destroy();                       // SIGTERM: the engine finishes the current step
+            return;
         }
+
+        // Windows has no SIGTERM: destroy() would TerminateProcess the engine and the final "done"
+        // line would never be printed. Ask it to stop over stdin instead. The engine kills the
+        // running benchmark (Job Object) and prints done{cancelled:true}; if it does not exit in
+        // time, kill it - closing its Job Object handle also kills the benchmark.
+        try {
+            var stdin = process.getOutputStream();
+            stdin.write("stop\n".getBytes(StandardCharsets.UTF_8));
+            stdin.flush();
+        } catch (java.io.IOException ignored) {
+            process.destroyForcibly();
+            return;
+        }
+        Thread.ofVirtual().start(() -> {
+            try {
+                if (!process.waitFor(STOP_GRACE_MS, java.util.concurrent.TimeUnit.MILLISECONDS))
+                    process.destroyForcibly();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        });
     }
 
     private EngineEvent parseEvent(String line) {

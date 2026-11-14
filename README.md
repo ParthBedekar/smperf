@@ -6,6 +6,12 @@ You pick an executable, SMPerf runs it at several thread counts (1, 2, 4, 8, …
 
 This repository currently contains the **Linux reference implementation**. Two friends are building the **Windows** and **macOS** ports. This README explains what exists, exactly what a port has to reproduce, and how much of the overall plan is done.
 
+> **Windows:** a port is included, see [WINDOWS.md](WINDOWS.md) (build, behaviour differences, what is verified).
+> The sections below describe the Linux reference implementation and the engine contract.
+
+> **First-run tour:** the first time the app opens it shows an 11-step guided tour (Next / Back / Skip, or Right / Left / Esc).
+> Replay it any time from Help > Take the Tour. The code is `ui/GuidedTour.java`; the steps are listed in `MainController.tourSteps()`.
+
 > Status: early prototype. The whole pipeline works end to end on Linux (detect → configure → run → chart). Many planned features are not started. See [Feature status](#feature-status).
 
 ---
@@ -226,12 +232,10 @@ Prerequisites: a C compiler (gcc/clang), JDK 21+, JavaFX 21 (via your build tool
 
 ```bash
 cd native
-mkdir -p bin
-gcc -O2 -Wall -std=gnu11 -o bin/mperf main.c runner.c stats.c topology.c util.c -lm
+make                 # picks the right platform sources; output is bin/mperf
+make test            # unit tests for the portable helpers
 ./bin/mperf topology
 ```
-
-(`-lm` is needed because `stats.c` uses `sqrt`. Use the real source filenames from your tree.)
 
 **App**
 
@@ -269,7 +273,7 @@ gcc -O2 -fopenmp sum.c -o sum
 
 Legend: ✅ complete · 🟡 semi-complete · ❌ not started · 🔨 in progress by contributors
 
-**Score: 3 complete, 3 semi-complete, 8 not started (14 goals).**
+**Score (counting the rows below): 6 complete, 3 semi-complete, 5 not started (14 goals).**
 
 ### MVP
 
@@ -280,14 +284,14 @@ Legend: ✅ complete · 🟡 semi-complete · ❌ not started · 🔨 in progres
 | Define an experiment (thread counts + CPU sets to pin to) | 🟡 | Thread counts: auto or manual list, works. **CPU sets: the engine always pins using one fixed placement** (physical cores first, then hyperthreads). The UI cannot choose a CPU set and the CLI doesn't accept one yet. The `cpu_range` plumbing in the runner already supports arbitrary sets. |
 | Run engine (warm-up, N repeats, timeout, best/mean) | ✅ | Plus max, stddev, user/sys time, peak RSS, failed-run counting, cancel. |
 | Results view (table + speedup chart + ideal line) | ✅ | Live updating, tooltips with speedup/efficiency, 12-column table. |
-| Export results to CSV / JSON | ❌ | Nothing yet. Needs the experiment config + machine info + results in one file for reproducibility. |
+| Export results to CSV / JSON | ✅ | Session tab / toolbar: save JSON (machine + config + results), export CSV, reopen both, recent files, drag and drop. |
 
 ### Next tier
 
 | Goal | Status | What exists / what's missing |
 |---|---|---|
-| Efficiency and variance (flag noisy runs) | 🟡 | Efficiency (speedup ÷ thread ratio) and stddev are shown. **No noise flagging** yet, e.g. highlight when stddev/mean exceeds a threshold. |
-| Compare runs (overlay two benchmarks) | ❌ | Results are cleared at the start of each run. Needs result storage and a multi-series chart. |
+| Efficiency and variance (flag noisy runs) | ✅ | Efficiency, stddev and a configurable noise threshold (stddev/mean) in the results view. |
+| Compare runs (overlay two benchmarks) | ✅ | Compare tab: up to 6 saved or live runs on one chart + table. |
 | Placement presets (same-core hyperthreads, separate cores, spread, close) | ❌ | Only the implicit "separate cores first" order. The building blocks exist (`physical_core`, `siblings`, `placement_order`, caches' `shared_cpus` for "close"/"spread"). |
 | Hardware counters via `perf stat` (cache misses, IPC) | ❌ | Linux-only feature in practice (`perf_event_open`); Windows/macOS need other approaches. |
 | Auto-diagnosis (memory-bound vs compute-bound) | ❌ | Depends on counters and variance flagging. |
@@ -296,7 +300,7 @@ Legend: ✅ complete · 🟡 semi-complete · ❌ not started · 🔨 in progres
 
 | Goal | Status | Notes |
 |---|---|---|
-| Windows and macOS support | 🔨 | This is what the porting guide below is for. |
+| Windows and macOS support | 🟡 | macOS engine is in `native/platform/macos`. Windows engine is in `native/platform/windows` (compiled, not yet conformance-tested on a real machine, see [WINDOWS.md](WINDOWS.md)). |
 | Built-in roofline plot | ❌ | Needs counters (FLOPs and bytes) plus a memory-bandwidth measurement. |
 | Saved experiment profiles and run history | ❌ | Related to export and compare. |
 
@@ -438,7 +442,7 @@ Before opening a PR, check each of these by hand against your engine:
 These are real behaviors of the current code, listed so they don't surprise you:
 
 1. **Argument entry.** `MainController.createConfig` turns each *line* of the arguments box into **one** argv element, so a line like `--size 1000000` is passed as a single argument `"--size 1000000"`, not two. The placeholder text in the UI suggests otherwise. Fix by tokenizing (shell-style) or by changing the placeholder to one argument per line.
-2. **Cancel latency.** The engine only checks the stop flag *between* thread-count steps, so a cancel waits for the current step (all of its repeats) to finish. On the UI side, `Process.destroy()` sends `SIGTERM` on Linux/macOS.
+2. **Cancel latency.** (Linux/macOS) The engine only checks the stop flag *between* thread-count steps, so a cancel waits for the current step (all of its repeats) to finish. On the UI side, `Process.destroy()` sends `SIGTERM` on Linux/macOS.
 3. **Cancel status text can be overwritten.** After a cancel the engine exits normally, so the Java `Task` completes as *succeeded* and the "Benchmark finished" status can replace the "Benchmark cancelled" message set by the `done` event.
 4. **Timeout kills only the direct child.** If the benchmark is a launcher script that spawns other processes, those survive a `SIGKILL` of the parent. (On Windows, use a Job Object; on POSIX consider a process group.)
 5. **Wall time includes launch cost.** The timer starts before `fork` and stops after the polling loop notices exit. With a timeout enabled, resolution is about 1 ms. Fine for benchmarks lasting seconds, noisy for very short ones.
