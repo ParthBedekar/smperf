@@ -4,6 +4,7 @@
 
 #include <stdio.h>
 #include <stdint.h>
+#include <stdarg.h>
 #include "util.h"
 #define SYS_CPU "/sys/devices/system/cpu"
 #define MAX_LOGICAL 256
@@ -37,10 +38,13 @@ struct machine {
     struct logical_cpu cpus[MAX_LOGICAL];
     int cache_count;
     struct cache_info caches[MAX_CACHES];
+    int warning_count;         /* human-readable notes about conditions that skew results */
+    char warnings[4][160];     /* (emitted as "warnings"; e.g. "running on battery power") */
 };
 
 int  detect_topology(struct machine *m);
 void machine_free(struct machine *m);
+void machine_add_warning(struct machine *m, const char *fmt, ...);
 void machine_print_json(const struct machine *m, FILE *out);
 
 void group_physical_cores(struct machine *m);

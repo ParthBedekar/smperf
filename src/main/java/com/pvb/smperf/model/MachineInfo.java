@@ -13,7 +13,14 @@ public record MachineInfo(
         int physicalCount,
         String pinning,
         List<Cpu> cpus,
-        List<Cache> caches) {
+        List<Cache> caches,
+        List<String> warnings) {
+
+    /** Notes from the engine about conditions that skew timings (e.g. battery power on Windows).
+     *  Older engines and saved sessions don't have the field, so never null. */
+    public List<String> warningList() {
+        return warnings == null ? List.of() : warnings;
+    }
 
     /** "pinning" was added for the macOS port. Older engines / saved sessions don't
      *  have it; those all came from the Linux engine, which always pins. */

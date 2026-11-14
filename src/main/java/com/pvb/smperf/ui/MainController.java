@@ -19,6 +19,7 @@ import javafx.scene.Node;
 import javafx.scene.Parent;
 import javafx.scene.control.*;
 import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.Pane;
 import javafx.scene.layout.VBox;
 import javafx.stage.FileChooser;
 import javafx.stage.Window;
@@ -72,6 +73,8 @@ public class MainController {
     @FXML private Label footerResults;
     @FXML private Label footerEngine;
     private TopologyWindow topologyWindow;
+    private Node toolbarNode;
+    private GuidedTour tour;
     @FXML
     private void initialize() {
         // Spinners need factories
@@ -176,9 +179,11 @@ public class MainController {
         AppMenus menus = new AppMenus(root, workspace, session, sessionActions, topologyWindow,
                 runButton.disableProperty(), cancelButton.disableProperty(),
                 new AppMenus.Hooks(this::chooseBinary, this::startBenchmark, this::cancelBenchmark,
-                        () -> logArea.clear(), this::copyLog, this::showAboutDialog, this::exitApp));
+                        () -> logArea.clear(), this::copyLog, this::showAboutDialog, this::exitApp,
+                        this::startTour));
         menus.buildMenus(menuBar);                    // must come BEFORE sessionActions.install
-        workspace.insertTop(1, menus.buildToolbar()); // between menu bar and tab strip
+        toolbarNode = menus.buildToolbar();
+        workspace.insertTop(1, toolbarNode);          // between menu bar and tab strip
         sessionActions.install(menuBar);              // adds Open Results / Recent / Save / Export / Clear Results
         sessionActions.installDropTarget(root);
         if (System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("mac")) {
@@ -186,6 +191,98 @@ public class MainController {
         }
 
         workspace.show("home");
+    }
+
+    // ------------------------------------------------------------------
+    // Guided tour
+    // ------------------------------------------------------------------
+
+    /** Called once by App after the window is shown; does nothing after the tour was seen. */
+    public void maybeStartTour() {
+        if (GuidedTour.shouldAutoStart()) startTour();
+    }
+
+    /** Help > Take the Tour, and the automatic first run. */
+    private void startTour() {
+        if (root.getScene() == null || !(root.getScene().getRoot() instanceof Pane host)) {
+            workspace.info("The tour is not available in this window.");
+            return;
+        }
+        if (tour == null) tour = new GuidedTour(host);
+        if (tour.isActive()) return;
+        tour.start(tourSteps(), () -> workspace.show("home"));
+    }
+
+    private static Node groupOf(Node n) {
+        Node p = n;
+        while (p != null && !(p instanceof GroupBox)) p = p.getParent();
+        return p != null ? p : n;
+    }
+
+    private List<GuidedTour.Step> tourSteps() {
+        Runnable home = () -> workspace.show("home");
+        return List.of(
+                GuidedTour.Step.centered("Welcome to SMPerf",
+                        "SMPerf runs your program with different numbers of threads and shows how well it "
+                                + "scales on this computer.\n\nThis short tour points out the main parts of the window. "
+                                + "Use Next and Back to move around, or Skip to close it. You can replay it any "
+                                + "time from Help > Take the Tour.", home),
+
+                new GuidedTour.Step("Choose your program",
+                        "Click Browse... to pick the executable you want to benchmark. If it needs command-line "
+                                + "options, type them below, one per line. Write {threads} wherever the program "
+                                + "expects its thread count.",
+                        () -> groupOf(binaryField), home),
+
+                new GuidedTour.Step("Set up the run",
+                        "Threads: Automatic tests 1, 2, 3... up to every thread on your CPU. Choose Manual to "
+                                + "list your own counts, like 1,2,4,8.\n\nEach setting is repeated (Repetitions) after "
+                                + "some Warmup runs that are not counted, and a run is stopped after the Timeout.",
+                        () -> groupOf(threadMode), home),
+
+                new GuidedTour.Step("Your machine",
+                        "SMPerf detects your CPU, its cores and threads, and your memory. Where the operating "
+                                + "system allows it, every run is pinned to specific CPUs (one thread per physical core "
+                                + "first), so results stay comparable.\n\nTools > CPU Topology Viewer shows the full layout.",
+                        () -> groupOf(mCpu), home),
+
+                new GuidedTour.Step("Run it",
+                        "Press Run Benchmark (or F5). Results appear as each thread count finishes. "
+                                + "Cancel (Shift+F5) stops the run early.",
+                        () -> runButton, home),
+
+                new GuidedTour.Step("Run log",
+                        "Progress and warnings show up here while the benchmark runs, for example when the "
+                                + "computer is on battery power. Right-click the log to copy or clear it.",
+                        () -> groupOf(logArea), home),
+
+                new GuidedTour.Step("Results tab",
+                        "When a run finishes, this tab charts speedup against thread count, next to the ideal "
+                                + "line, and lists wall time, speedup and efficiency for every configuration. "
+                                + "Noisy measurements are flagged so you know which numbers to trust.",
+                        () -> workspace.tabNode("results"), () -> workspace.show("results")),
+
+                new GuidedTour.Step("Session tab",
+                        "Save a run as a .json file (it includes your machine and settings, so it can be "
+                                + "reproduced), export it as CSV for a spreadsheet, or reopen one later. "
+                                + "You can also drag a saved file onto the window.",
+                        () -> workspace.tabNode("session"), () -> workspace.show("session")),
+
+                new GuidedTour.Step("Compare tab",
+                        "Overlay up to six saved or live runs on one chart, for example before and after an "
+                                + "optimisation, or the same program on two different computers.",
+                        () -> workspace.tabNode("compare"), () -> workspace.show("compare")),
+
+                new GuidedTour.Step("Menus and toolbar",
+                        "Everything is also in the menus: File opens and saves results, Run starts and stops "
+                                + "a benchmark, Tools has the CPU Topology Viewer, and Help has the keyboard "
+                                + "shortcuts and this tour.\n\nThe toolbar (View > Toolbar) adds one-click buttons "
+                                + "for the most common actions.",
+                        () -> toolbarNode != null && toolbarNode.isVisible() ? toolbarNode : menuBar, home),
+
+                GuidedTour.Step.centered("You are ready to go",
+                        "Start by clicking Browse... and choosing a program to benchmark.\n\n"
+                                + "If you get stuck, Help > Take the Tour plays this tour again.", home));
     }
 
     private void copyLog() {
@@ -204,16 +301,31 @@ public class MainController {
         FileChooser chooser = new FileChooser();
         chooser.setTitle("Select executable to benchmark");
         Window window = root.getScene().getWindow();
+        if (EngineLocator.isWindows()) {
+            chooser.getExtensionFilters().addAll(
+                    new FileChooser.ExtensionFilter("Programs (*.exe, *.com, *.bat, *.cmd)",
+                            "*.exe", "*.com", "*.bat", "*.cmd"),
+                    new FileChooser.ExtensionFilter("All files", "*.*"));
+        }
         File selected = chooser.showOpenDialog(window);
         if (selected == null) return;
 
         Path path = selected.toPath().toAbsolutePath();
-        if (!Files.isRegularFile(path) || !Files.isExecutable(path)) {
+        if (!isRunnable(path)) {
             showAlert("Invalid executable", "The selected file must be a regular executable file.");
             return;
         }
         binaryField.setText(path.toString());
         selectedInfo.setText("Selected: " + selected.getName());
+    }
+
+    /** A regular, runnable file. Windows has no execute bit (Files.isExecutable is true for any
+     *  readable file there), so it also checks for a program extension. */
+    private static boolean isRunnable(Path p) {
+        if (!Files.isRegularFile(p) || !Files.isExecutable(p)) return false;
+        if (!EngineLocator.isWindows()) return true;
+        String n = p.getFileName().toString().toLowerCase(Locale.ROOT);
+        return n.endsWith(".exe") || n.endsWith(".com") || n.endsWith(".bat") || n.endsWith(".cmd");
     }
 
     @FXML
@@ -240,6 +352,9 @@ public class MainController {
                 + (config.argsTemplate().isEmpty() ? "" : "  " + String.join(" ", config.argsTemplate())));
         log("Threads  " + (config.threads().isEmpty() ? "automatic" : config.threads().toString())
                 + "   ·   " + config.repeats() + " repetitions, " + config.warmup() + " warmup");
+        if (cachedMachineInfo != null) {
+            for (String w : cachedMachineInfo.warningList()) log("Warning  " + w);
+        }
         if (cachedMachineInfo != null && !cachedMachineInfo.pinningSupported()) {
             log("Note     CPU pinning is not supported on this OS; only the thread count varies");
         }
@@ -348,7 +463,7 @@ public class MainController {
         String path = binaryField.getText().trim();
         if (path.isEmpty()) throw new IllegalArgumentException("Select a target executable first.");
         Path binary = Path.of(path);
-        if (!Files.isExecutable(binary)) throw new IllegalArgumentException("Target is not executable.");
+        if (!isRunnable(binary)) throw new IllegalArgumentException("Target is not executable.");
 
         List<Integer> threads = new ArrayList<>();
         if ("Manual".equals(threadMode.getValue())) {
