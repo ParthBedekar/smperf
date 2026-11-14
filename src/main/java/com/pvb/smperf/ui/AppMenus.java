@@ -18,7 +18,8 @@ import java.util.Map;
 public final class AppMenus {
 
     public record Hooks(Runnable openExecutable, Runnable run, Runnable cancel,
-                        Runnable clearLog, Runnable copyLog, Runnable about, Runnable exit) {}
+                        Runnable clearLog, Runnable copyLog, Runnable about, Runnable exit,
+                        Runnable tour) {}
 
     private static final String REPO = "https://github.com/ParthBedekar/smperf";
     private static final double DEFAULT_FONT = 13;
@@ -120,6 +121,7 @@ public final class AppMenus {
 
     private Menu helpMenu() {
         return new Menu("Help", null,
+                item("Take the Tour", null, h.tour()),
                 item("Keyboard Shortcuts", "F1", this::showShortcuts),
                 item("Copy Project URL", null, () -> {
                     ClipboardContent c = new ClipboardContent();
@@ -155,9 +157,7 @@ public final class AppMenus {
 
         Button topo = tool("CPU Topology", "Open the topology window (Ctrl+T)", topology::show);
         Button cmp = tool("Compare", "Compare runs (Ctrl+4)", () -> ws.show("compare"));
-// ...
         toolbar = new HBox(4, open, sep(), run, stop, sep(), openRes, save, csv, sep(), cmp, topo);
-        toolbar = new HBox(4, open, sep(), run, stop, sep(), openRes, save, csv, sep(), topo);
         toolbar.getStyleClass().add("toolbar");
         toolbar.setAlignment(Pos.CENTER_LEFT);
         toolbar.managedProperty().bind(toolbar.visibleProperty());

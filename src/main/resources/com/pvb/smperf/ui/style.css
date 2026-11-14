@@ -437,3 +437,25 @@
     .cmp-list .list-cell, .cmp-list .list-cell:filled:selected, .cmp-list .list-cell:filled:hover {
         -fx-background-color: #ffffff; -fx-border-color: #e4e7ec; -fx-border-width: 0 0 1 0; -fx-padding: 6 8 6 8;
     }
+/* ===== Guided tour (first-run walkthrough) ===== */
+.tour-card {
+    -fx-background-color: -sm-panel;
+    -fx-border-color: -sm-accent;
+    -fx-border-width: 2;
+    -fx-padding: 14 16 12 16;
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.45), 18, 0, 0, 5);
+}
+.tour-step  { -fx-text-fill: -sm-muted; -fx-font-size: 0.85em; }
+.tour-title { -fx-text-fill: -sm-accent-text; -fx-font-size: 1.25em; -fx-font-weight: bold; }
+.tour-body  { -fx-text-fill: -sm-text; -fx-line-spacing: 2; }
+.tour-dot {
+    -fx-background-color: -sm-edge-soft;
+    -fx-background-radius: 5;
+    -fx-min-width: 8; -fx-min-height: 8; -fx-pref-width: 8; -fx-pref-height: 8; -fx-max-width: 8; -fx-max-height: 8;
+}
+.tour-dot-on { -fx-background-color: -sm-accent; }
+.tour-skip, .tour-skip:focused {
+    -fx-background-color: transparent; -fx-border-color: transparent; -fx-text-fill: -sm-muted;
+    -fx-underline: true; -fx-padding: 4 6 4 0;
+}
+.tour-skip:hover { -fx-background-color: transparent; -fx-border-color: transparent; -fx-text-fill: -sm-accent; }

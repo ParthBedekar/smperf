@@ -169,3 +169,40 @@ int parse_size(const char *s, uint64_t *bytes) {
     *bytes = v * mult;
     return 0;
 }
+
+int quote_windows_arg(const char *arg, char *dst, size_t size) {
+    size_t used = 0;
+#define PUT(ch) do { if (used + 1 >= size) return -1; dst[used++] = (char)(ch); } while (0)
+
+    int needs_quotes = (*arg == '\0');
+    for (const char *p = arg; *p && !needs_quotes; p++)
+        if (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\v' || *p == '"') needs_quotes = 1;
+
+    if (!needs_quotes) {
+        for (const char *p = arg; *p; p++) PUT(*p);
+        dst[used] = '\0';
+        return (int)used;
+    }
+
+    PUT('"');
+    for (const char *p = arg; ; p++) {
+        size_t backslashes = 0;
+        while (*p == '\\') { backslashes++; p++; }
+
+        if (*p == '\0') {                      /* trailing backslashes precede the closing quote */
+            for (size_t i = 0; i < backslashes * 2; i++) PUT('\\');
+            break;
+        }
+        if (*p == '"') {                       /* backslashes before a quote are doubled, quote escaped */
+            for (size_t i = 0; i < backslashes * 2 + 1; i++) PUT('\\');
+            PUT('"');
+        } else {                               /* backslashes not before a quote stay literal */
+            for (size_t i = 0; i < backslashes; i++) PUT('\\');
+            PUT(*p);
+        }
+    }
+    PUT('"');
+    dst[used] = '\0';
+    return (int)used;
+#undef PUT
+}
