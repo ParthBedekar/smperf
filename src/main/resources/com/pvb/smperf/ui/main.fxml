@@ -35,26 +35,13 @@
                     </HBox>
                     <Label fx:id="selectedInfo" text="No executable selected" styleClass="note"/>
 
-                    <Label text="Input file (optional)" styleClass="field-label">
-                        <padding><Insets top="6" right="0" bottom="0" left="0"/></padding>
-                    </Label>
-                    <HBox fx:id="inputRow" spacing="6">
-                        <TextField fx:id="inputField" editable="false"
-                                   promptText="None — passed to the program as an argument"
-                                   HBox.hgrow="ALWAYS"/>
-                        <Button text="Browse…" onAction="#chooseInput"/>
-                        <Button text="Clear" onAction="#clearInput"/>
-                    </HBox>
-                    <Label styleClass="note" wrapText="true"
-                           text="Put {input} in Arguments to place the path (e.g. --in {input}); otherwise it is appended as the last argument."/>
-
-                    <Label text="Arguments" styleClass="field-label">
+                    <Label text="Arguments (one per line)" styleClass="field-label">
                         <padding><Insets top="6" right="0" bottom="0" left="0"/></padding>
                     </Label>
                     <TextArea fx:id="argumentsField" styleClass="code-area" wrapText="false"
                               prefRowCount="4" VBox.vgrow="ALWAYS"/>
                     <Label styleClass="note" wrapText="true"
-                           text="Split like a shell: spaces separate arguments, use &quot;double&quot; or 'single' quotes to keep spaces. {threads} = thread count of each run."/>
+                           text="One argument per line (no shell): flag and value on separate lines. {threads} = thread count of each run."/>
                 </GroupBox>
 
                 <GroupBox title="Run settings" minWidth="330" prefWidth="330" maxWidth="330">

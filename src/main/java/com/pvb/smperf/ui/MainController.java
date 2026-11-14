@@ -182,8 +182,6 @@ public class MainController {
                         () -> logArea.clear(), this::copyLog, this::showAboutDialog, this::exitApp,
                         this::startTour));
         menus.buildMenus(menuBar);                    // must come BEFORE sessionActions.install
-        toolbarNode = menus.buildToolbar();
-        workspace.insertTop(1, toolbarNode);          // between menu bar and tab strip
         sessionActions.install(menuBar);              // adds Open Results / Recent / Save / Export / Clear Results
         sessionActions.installDropTarget(root);
         if (System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("mac")) {
@@ -192,7 +190,6 @@ public class MainController {
 
         workspace.show("home");
     }
-
     // ------------------------------------------------------------------
     // Guided tour
     // ------------------------------------------------------------------
@@ -218,7 +215,6 @@ public class MainController {
         while (p != null && !(p instanceof GroupBox)) p = p.getParent();
         return p != null ? p : n;
     }
-
     private List<GuidedTour.Step> tourSteps() {
         Runnable home = () -> workspace.show("home");
         return List.of(
@@ -273,12 +269,11 @@ public class MainController {
                                 + "optimisation, or the same program on two different computers.",
                         () -> workspace.tabNode("compare"), () -> workspace.show("compare")),
 
-                new GuidedTour.Step("Menus and toolbar",
-                        "Everything is also in the menus: File opens and saves results, Run starts and stops "
+                new GuidedTour.Step("Menus",
+                        "Everything is in the menus: File opens and saves results, Run starts and stops "
                                 + "a benchmark, Tools has the CPU Topology Viewer, and Help has the keyboard "
-                                + "shortcuts and this tour.\n\nThe toolbar (View > Toolbar) adds one-click buttons "
-                                + "for the most common actions.",
-                        () -> toolbarNode != null && toolbarNode.isVisible() ? toolbarNode : menuBar, home),
+                                + "shortcuts and this tour.",
+                        () -> menuBar, home),
 
                 GuidedTour.Step.centered("You are ready to go",
                         "Start by clicking Browse... and choosing a program to benchmark.\n\n"
