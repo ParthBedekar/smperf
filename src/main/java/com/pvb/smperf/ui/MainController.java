@@ -19,6 +19,7 @@ import javafx.scene.Node;
 import javafx.scene.Parent;
 import javafx.scene.control.*;
 import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.stage.FileChooser;
 import javafx.stage.Window;
@@ -35,6 +36,8 @@ public class MainController {
     @FXML private BorderPane root;
     @FXML private MenuBar menuBar;
     @FXML private TextField binaryField;
+    @FXML private TextField inputField;
+    @FXML private HBox inputRow;
     @FXML private TextArea argumentsField;
     @FXML private TextArea logArea;
     @FXML private ComboBox<String> threadMode;
@@ -49,6 +52,8 @@ public class MainController {
     @FXML private Label mCores;
     @FXML private Label mMem;
     @FXML private Label footerStatus;      // the one and only status line (bottom bar)
+    @FXML private Label footerResults;
+    @FXML private Label footerEngine;
     @FXML private ProgressBar runProgress;
 
     private EngineClient engine;
@@ -69,9 +74,8 @@ public class MainController {
     private SessionService session;
     private SessionActions sessionActions;
     private SavedConfig lastSavedConfig;   // snapshot of the config of the run in progress
-    @FXML private Label footerResults;
-    @FXML private Label footerEngine;
     private TopologyWindow topologyWindow;
+
     @FXML
     private void initialize() {
         // Spinners need factories
@@ -84,11 +88,13 @@ public class MainController {
         threadMode.setOnAction(e ->
                 threadField.setDisable(!"Manual".equals(threadMode.getValue())));
 
-        argumentsField.setPromptText("e.g.  --size  then  1000000  on the next line");
+        argumentsField.setPromptText("e.g.  --size 1000000   or   --name \"my file\"");
+
         MenuItem cp = new MenuItem("Copy");        cp.setOnAction(e -> logArea.copy());
         MenuItem sa = new MenuItem("Select All");  sa.setOnAction(e -> logArea.selectAll());
         MenuItem cl = new MenuItem("Clear Log");   cl.setOnAction(e -> logArea.clear());
         logArea.setContextMenu(new ContextMenu(cp, sa, new SeparatorMenuItem(), cl));
+
         loadResultsView();
         loadSpecsView();
         buildWorkspace();
@@ -105,7 +111,6 @@ public class MainController {
             engine = new EngineClient(EngineLocator.find());
             loadMachineAsync();
             footerEngine.setText("Engine: ready");
-
         } catch (Exception ex) {
             setStatus("Engine unavailable");
             footerEngine.setText("Engine: missing");
@@ -169,7 +174,8 @@ public class MainController {
                 () -> { if (resultsController != null) resultsController.setResults(resultData); }));
         workspace.register(new Workspace.View("session", "Session",
                 () -> new SessionView(session, sessionActions)));
-        workspace.register(new Workspace.View("compare", "Compare", () -> new CompareView(session, workspace)));
+        workspace.register(new Workspace.View("compare", "Compare",
+                () -> new CompareView(session, workspace)));
         // Topology is no longer a tab: it has its own window.
 
         topologyWindow = new TopologyWindow(specsRoot, workspace);
@@ -214,6 +220,24 @@ public class MainController {
         }
         binaryField.setText(path.toString());
         selectedInfo.setText("Selected: " + selected.getName());
+    }
+
+    @FXML
+    private void chooseInput() {
+        FileChooser chooser = new FileChooser();
+        chooser.setTitle("Select input file for the program");
+        String cur = inputField.getText();
+        if (cur != null && !cur.isBlank()) {
+            File parent = new File(cur).getParentFile();
+            if (parent != null && parent.isDirectory()) chooser.setInitialDirectory(parent);
+        }
+        File selected = chooser.showOpenDialog(root.getScene().getWindow());
+        if (selected != null) inputField.setText(selected.toPath().toAbsolutePath().toString());
+    }
+
+    @FXML
+    private void clearInput() {
+        inputField.clear();
     }
 
     @FXML
@@ -365,12 +389,24 @@ public class MainController {
             }
         }
 
-        List<String> args = new ArrayList<>();
-        String text = argumentsField.getText();
-        if (text != null && !text.isBlank()) {
-            for (String line : text.split("\\R")) {
-                if (!line.isEmpty()) args.add(line);
+        // shell-style split of the Arguments box (quotes keep spaces inside one argument)
+        List<String> args = ArgTokenizer.parse(argumentsField.getText());
+
+        // optional input file: replaces {input} in the arguments, or is appended as the last argument
+        String inputPath = inputField.getText() == null ? "" : inputField.getText().trim();
+        if (!inputPath.isEmpty()) {
+            if (!Files.isRegularFile(Path.of(inputPath)))
+                throw new IllegalArgumentException("Input file not found: " + inputPath);
+            boolean placed = false;
+            for (int i = 0; i < args.size(); i++) {
+                if (args.get(i).contains("{input}")) {
+                    args.set(i, args.get(i).replace("{input}", inputPath));
+                    placed = true;
+                }
             }
+            if (!placed) args.add(inputPath);
+        } else if (args.stream().anyMatch(a -> a.contains("{input}"))) {
+            throw new IllegalArgumentException("Arguments use {input} but no input file is selected.");
         }
 
         double timeoutValue;
@@ -418,6 +454,7 @@ public class MainController {
         runProgress.setVisible(running);
         runProgress.setManaged(running);
         binaryField.setDisable(running);
+        inputRow.setDisable(running);
         argumentsField.setDisable(running);
         threadMode.setDisable(running);
         threadField.setDisable(running || !"Manual".equals(threadMode.getValue()));
