@@ -42,18 +42,18 @@ struct job {
     char arg_store[MAX_ARGS][ARG_LEN];
 };
 
-/* Outcome of ONE launch. Filled by run_once. */
 struct run_sample {
-    int started;               /* 1 if the program really started (exec worked) */
-    int exit_code;             /* valid only when term_signal == 0 */
-    int term_signal;           /* signal that killed it, 0 if it exited normally */
-    int timed_out;             /* 1 if we killed it for exceeding timeout_sec */
+    int started;
+    int exit_code;
+    int term_signal;
+    int timed_out;
     double wall_sec;
     double user_sec;
     double sys_sec;
     long max_rss_kb;
+    int counters_ok;               /* 1 if the counters below are valid for this run */
+    uint64_t cycles, instructions, cache_refs, cache_misses;
 };
-
 /* Summary over all measured repeats (warmups excluded). Filled by run_job. */
 struct run_result {
     int runs;                  /* measured runs completed */
@@ -66,6 +66,8 @@ struct run_result {
     double sys_mean;
     long max_rss_kb;           /* peak over all runs */
     struct run_sample samples[MAX_REPEATS];
+    int counters_ok;           /* 1 if every clean run had valid hardware counters */
+    uint64_t cycles, instructions, cache_refs, cache_misses;   /* mean per clean run */
 };
 
 

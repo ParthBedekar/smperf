@@ -13,7 +13,7 @@ static int usage(const char *prog) {
     fprintf(stderr,
             "usage:\n"
             "  %s topology\n"
-            "  %s run [--threads auto|1,2,4] [--repeats N] [--warmup N] [--timeout SEC] -- <program> [args...]\n",
+            "  %s run [--threads auto|1,2,4] [--cpus 0,2,4] [--repeats N] [--warmup N] [--timeout SEC] -- <program> [args...]\n",
             prog, prog);
     return 2;
 }
@@ -54,7 +54,25 @@ static int placement_order(const struct machine *m, int *order) {
     }
     return n;
 }
+static int parse_cpu_order(const char *s, const struct machine *m, int *order, int max) {
+    char buf[512];
+    if (snprintf(buf, sizeof buf, "%s", s) >= (int)sizeof buf) return -1;
 
+    int n = 0;
+    char *save = NULL;
+    for (char *tok = strtok_r(buf, ",", &save); tok; tok = strtok_r(NULL, ",", &save)) {
+        long v;
+        if (n >= max || parse_long(tok, 0, MAX_CPUS - 1, &v) != 0) return -1;
+        int found = 0;
+        for (int i = 0; i < m->logical_count; i++)
+            if (m->cpus[i].id == (int)v) { found = 1; break; }
+        if (!found) return -1;
+        for (int k = 0; k < n; k++)
+            if (order[k] == (int)v) return -1;      /* no duplicates */
+        order[n++] = (int)v;
+    }
+    return n > 0 ? n : -1;
+}
 static int parse_threads(const char *s, int n, int *steps, int max) {
     int count = 0;
 
@@ -87,14 +105,19 @@ static const char *status_message(int rc) {
         default:             return "unknown error";
     }
 }
-
 static void emit_result(int threads, const struct run_result *r) {
     printf("{\"event\":\"result\",\"threads\":%d,\"runs\":%d,\"failed\":%d,"
     "\"wall_best\":%.6f,\"wall_mean\":%.6f,\"wall_max\":%.6f,\"wall_stddev\":%.6f,"
-    "\"user_mean\":%.6f,\"sys_mean\":%.6f,\"max_rss_kb\":%ld}\n",
+    "\"user_mean\":%.6f,\"sys_mean\":%.6f,\"max_rss_kb\":%ld",
     threads, r->runs, r->failed_runs,
     r->wall_best, r->wall_mean, r->wall_max, r->wall_stddev,
     r->user_mean, r->sys_mean, r->max_rss_kb);
+    if (r->counters_ok) {
+        printf(",\"cycles\":%llu,\"instructions\":%llu,\"cache_refs\":%llu,\"cache_misses\":%llu",
+               (unsigned long long)r->cycles, (unsigned long long)r->instructions,
+               (unsigned long long)r->cache_refs, (unsigned long long)r->cache_misses);
+    }
+    printf("}\n");
     fflush(stdout);
 }
 
@@ -125,6 +148,7 @@ static int cmd_topology(void) {
 static int cmd_run(int argc, char **argv) {
     const char *threads_arg = "auto";
     long repeats = 5, warmup = 1;
+    const char *cpus_arg = NULL;
     double timeout = 60;
     int prog = -1;
 
@@ -146,7 +170,9 @@ static int cmd_run(int argc, char **argv) {
             if (parse_long(val, 0, 100, &warmup) != 0) return usage(argv[0]);
         } else if (strcmp(opt, "--timeout") == 0) {
             if (parse_double(val, 0, 86400, &timeout) != 0) return usage(argv[0]);
-        } else {
+        } else if (strcmp(opt, "--cpus") == 0) {
+            cpus_arg = val;
+        }else {
             return usage(argv[0]);
         }
     }
@@ -159,7 +185,17 @@ static int cmd_run(int argc, char **argv) {
     }
 
     int order[MAX_LOGICAL];
-    int n = placement_order(&m, order);
+      int n;
+      if (cpus_arg != NULL) {
+          n = parse_cpu_order(cpus_arg, &m, order, MAX_LOGICAL);
+          if (n < 0) {
+              fprintf(stderr, "invalid --cpus (ids must be distinct online CPUs)\n");
+              machine_free(&m);
+              return 2;
+          }
+      } else {
+          n = placement_order(&m, order);
+      }
 
     int steps[MAX_STEPS];
     int step_count = parse_threads(threads_arg, n, steps, MAX_STEPS);

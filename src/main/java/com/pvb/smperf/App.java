@@ -28,7 +28,8 @@ public class App extends Application {
         stage.setTitle("SMPerf");
         stage.setScene(scene);
         stage.show();
-
+        var iconUrl = App.class.getResource("ui/icon.png");
+        if (iconUrl != null) stage.getIcons().add(new javafx.scene.image.Image(iconUrl.toExternalForm()));
         MainController controller = loader.getController();
         Platform.runLater(controller::maybeStartTour);     // only the first time (see GuidedTour)
     }

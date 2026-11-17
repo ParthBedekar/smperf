@@ -28,13 +28,13 @@ ifeq ($(OS),Windows_NT)
   TARGET   := bin/mperf.exe
 else ifeq ($(UNAME_S),Darwin)
   CC       ?= clang
-  SOURCES  := $(COMMON) platform/posix/platform_posix.c platform/posix/run_once_posix.c \
+  SOURCES  := $(COMMON) src/perf.c platform/posix/platform_posix.c platform/posix/run_once_posix.c \
               platform/macos/topology_macos.c
   LDLIBS   :=
   TARGET   := bin/mperf
 else
   CC       ?= gcc
-  SOURCES  := $(COMMON) platform/posix/platform_posix.c platform/posix/run_once_posix.c \
+  SOURCES  := $(COMMON) src/perf.c platform/posix/platform_posix.c platform/posix/run_once_posix.c \
               platform/linux/topology_linux.c
   LDLIBS   := -lm
   TARGET   := bin/mperf

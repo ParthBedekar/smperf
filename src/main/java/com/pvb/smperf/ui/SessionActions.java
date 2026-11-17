@@ -209,10 +209,14 @@ public final class SessionActions {
         FileChooser fc = new FileChooser();
         fc.setTitle(title);
         Path d = svc.recent().lastDir();
-        if (d != null && d.toFile().isDirectory()) fc.setInitialDirectory(d.toFile());
+        if (d == null || !d.toFile().isDirectory()) {
+            Path home = Path.of(System.getProperty("user.home"));
+            Path docs = home.resolve("Documents");
+            d = docs.toFile().isDirectory() ? docs : home;
+        }
+        fc.setInitialDirectory(d.toFile());
         return fc;
     }
-
     private String suggestName(String ext) {
         String base = "results";
         SavedConfig c = svc.config().get();

@@ -1,7 +1,10 @@
-/* run_once() for Linux and macOS: fork + (Linux only) sched_setaffinity + execv + wait4. */
+/* run_once() for Linux and macOS: fork + (Linux only) sched_setaffinity + execv + wait4.
+ * On Linux it also opens hardware counters on the child (see perf.c); if that fails the run
+ * simply has no counters. */
 #define _GNU_SOURCE
 #include "include/runner.h"
 #include "include/stats.h"
+#include "include/perf.h"
 #ifdef __linux__
 #include <sched.h>
 #endif
@@ -17,10 +20,18 @@ static double now_sec(void) {
 int run_once(const struct job *j, struct run_sample *s) {
     memset(s, 0, sizeof *s);
 
+    /* "gate": the child waits on it until the parent has attached the counters. */
+    int gate[2] = {-1, -1};
+    int have_gate = 0;
+#ifdef __linux__
+    have_gate = pipe2(gate, O_CLOEXEC) == 0;   /* CLOEXEC: the benchmark never inherits it */
+#endif
+
     double first = now_sec();
     pid_t pid = fork();
     if (pid < 0) {
         perror("fork");
+        if (have_gate) { close(gate[0]); close(gate[1]); }
         return -1;
     }
 
@@ -54,8 +65,26 @@ int run_once(const struct job *j, struct run_sample *s) {
             close(fd);
         }
 
+        if (have_gate) {
+            close(gate[1]);                    /* so EOF arrives if the parent dies */
+            char go;
+            while (read(gate[0], &go, 1) < 0 && errno == EINTR) {}
+            close(gate[0]);
+        }
+
         execv(j->path, j->args);
         _exit(EXEC_FAILED_EXIT);
+    }
+
+    /* parent: attach the counters to the child, then let it exec */
+    struct perf_counters pc;
+    pc.n = 0;
+    if (have_gate) {
+        close(gate[0]);
+        perf_open(&pc, pid);                   /* on failure pc.n stays 0 */
+        char go = 1;
+        while (write(gate[1], &go, 1) < 0 && errno == EINTR) {}
+        close(gate[1]);
     }
 
     int status;
@@ -68,6 +97,7 @@ int run_once(const struct job *j, struct run_sample *s) {
         if (w < 0) {
             if (errno == EINTR) continue;
             perror("wait4");
+            perf_close(&pc);
             return -1;
         }
         if (!s->timed_out && now_sec() - first > j->timeout_sec) {
@@ -87,6 +117,16 @@ int run_once(const struct job *j, struct run_sample *s) {
     s->max_rss_kb = ru.ru_maxrss;
 #endif
 
+    /* counters stay readable after the process has exited */
+    struct perf_values pv;
+    perf_read(&pc, &pv);
+    perf_close(&pc);
+    s->counters_ok   = pv.available;
+    s->cycles        = pv.cycles;
+    s->instructions  = pv.instructions;
+    s->cache_refs    = pv.cache_refs;
+    s->cache_misses  = pv.cache_misses;
+
     if (WIFEXITED(status))        s->exit_code = WEXITSTATUS(status);
     else if (WIFSIGNALED(status)) s->term_signal = WTERMSIG(status);
 
@@ -95,7 +135,7 @@ int run_once(const struct job *j, struct run_sample *s) {
     if (j->cpus != NULL && WIFEXITED(status) &&
         s->exit_code == AFFINITY_FAILED_EXIT) {
         fprintf(stderr, "sched_setaffinity failed in child\n");
-    return -1;
-        }
-        return 0;
+        return -1;
+    }
+    return 0;
 }
